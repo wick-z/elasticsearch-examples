@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="INFO">
+    <Appenders>
+        <Console name="ConsoleAppender" target="SYSTEM_OUT">
+            <PatternLayout
+                    pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight{%5level}{FATAL=green, ERROR=red, WARN=yellow, INFO=green, DEBUG=green, TRACE=green} %style{%pid}{Magenta} --- [%15t] %style{%c{1.}}{Cyan}: %msg%n %ex"
+                    disableAnsi="false">
+            </PatternLayout>
+        </Console>
+        <!-- 每次启动都会清空文件内容 append：false-->
+        <File name="FileAppender" fileName="logs/app.log">
+            <PatternLayout>
+                <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %5level %pid --- [%15t] %c{1.}: %msg%n %ex</Pattern>
+            </PatternLayout>
+        </File>
+        <!--配置触发文件配置，fileName为写入的文件路径，filePattern为备份文件路径-->
+        <RollingFile name="rollingFileErrorAppender" fileName="${sys:user.dir}/logs/error.log"
+                     filePattern="${sys:user.dir}/logs/$${date:yyyy-MM}/error-%d{yyyy-MM-dd}-%i.log">
+            <ThresholdFilter level="error" onMatch="ACCEPT" onMismatch="DENY"/>
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss.SSS} %5level %pid --- [%15t] %c{1.}: %msg%n %ex"/>
+            <Policies>
+                <!--The OnStartupTriggeringPolicy policy causes a rollover if the log file is older than the current JVM's start time and the minimum file size is met or exceeded.-->
+                <!--The minimum size the file must have to roll over. A size of zero will cause a roll over no matter what the file size is. The default value is 1, which will prevent rolling over an empty file.-->
+<!--                <OnStartupTriggeringPolicy minSize="3"/>-->
+                <!--默认每隔1天备份一次，interval属性默认是1，具体时间单位取决于filePattern配置的时间格式最小的单位-->
+                <!--modulate属性为true时会自动校准触发备份的时间，比如最小单位是小时，interval是4，现在是凌晨3点，那么第一次触发会调整在
+                凌晨4点，接着就是早上8点，中午12点，下午4点依此类推-->
+                <TimeBasedTriggeringPolicy/>
+                <!--当文件大小达到size时会自动触发备份archive-->
+                <SizeBasedTriggeringPolicy size="3MB"/>
+            </Policies>
+            <!--控制filePattern配置的时间内最多只能有多少个备份文件，默认7个，若需要删除旧备份文件，需要搭配Delete-->
+<!--            <DefaultRolloverStrategy max=""/>-->
+        </RollingFile>
+    </Appenders>
+    <Loggers>
+        <AsyncRoot level="INFO">
+            <AppenderRef ref="ConsoleAppender"/>
+            <AppenderRef ref="FileAppender" />
+            <AppenderRef ref="rollingFileErrorAppender" />
+        </AsyncRoot>
+    </Loggers>
+</Configuration>
