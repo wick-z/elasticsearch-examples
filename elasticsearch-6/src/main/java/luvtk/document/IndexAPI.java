@@ -1,10 +1,9 @@
 package luvtk.document;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
-import luvtk.ElasticSearchTest;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.elasticsearch.action.admin.indices.alias.IndicesAliasesRequestBuilder;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
+import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.elasticsearch.action.admin.indices.refresh.RefreshResponse;
 import org.elasticsearch.action.admin.indices.settings.get.GetSettingsResponse;
 import org.elasticsearch.action.support.master.AcknowledgedResponse;
@@ -15,9 +14,11 @@ import org.elasticsearch.common.transport.TransportAddress;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
@@ -25,6 +26,7 @@ import java.net.UnknownHostException;
  * @author luvtk
  * @since 1.0.0
  * @see <a href="https://www.elastic.co/guide/en/elasticsearch/client/java-api/6.8/java-docs-index.html">index api</a>
+ * @see <a href="https://www.elastic.co/guide/en/elasticsearch/client/java-api/6.8/java-admin-indices.html">admin indices api</a>
  */
 public class IndexAPI {
 
@@ -32,13 +34,14 @@ public class IndexAPI {
      * transport client
      */
     private TransportClient client;
-
     /**
      * indices administration client
      */
     private IndicesAdminClient indicesAdminClient;
-
-    private static final Logger LOG = LogManager.getLogger(IndexAPI.class);
+    /**
+     * log using slf4j
+     */
+    private static final Logger LOG = LoggerFactory.getLogger(IndexAPI.class);
 
     /**
      * init
@@ -109,6 +112,33 @@ public class IndexAPI {
     }
 
     /**
+     * 为索引index增加别名
+     */
+    @Test
+    public void addAlias2Index() {
+        String index = "people";
+        String alias = "people_alias1";
+        try {
+            IndicesAliasesRequestBuilder indicesAliasesRequestBuilder = indicesAdminClient.prepareAliases();
+            // here's to check if alias existed,
+//            IndicesExistsResponse aliasesExistResponse = indicesAdminClient.prepareExists(alias).get();
+//            if (aliasesExistResponse.isExists()) {
+//                LOG.warn("alias exists, deleting...");
+//                indicesAliasesRequestBuilder.removeAlias(index, alias).get();
+//            }
+
+            AcknowledgedResponse acknowledgedResponse = indicesAliasesRequestBuilder.addAlias(index, alias).get();
+            if (acknowledgedResponse.isAcknowledged()) {
+                LOG.info("alias={} index={} created successfully!", alias, index);
+            } else {
+                LOG.error("alias={} index={}  failed to create!", alias, index);
+            }
+        } catch (Exception e) {
+            LOG.error("alias={} index={}  failed to create!", alias, index, e);
+        }
+    }
+
+    /**
      * define mappings to an existed index
      */
     @Test
@@ -138,7 +168,57 @@ public class IndexAPI {
                 LOG.error("failed to define mappings to index:{}!", index);
             }
         } catch (Exception e) {
-            LOG.error("failed to define mappings index:{}!", index, e);
+            LOG.error("failed to define mappings to index:{}!", index, e);
+        }
+    }
+
+    /**
+     * define mappings to an existed index
+     */
+    @Test
+    @Deprecated
+    public void updateMappings4ExistedIndex() {
+        String index = "people";
+        try {
+            AcknowledgedResponse response = indicesAdminClient.preparePutMapping(index)
+                    .setType("student").setType("employee")
+                    // here's to provide the type in the source document as well like {"type_name":{"properties":{}}}
+                    .setSource("{\n" +
+                            " \"student\": {\n" +
+                            "  \"properties\": {\n" +
+                            "    \"name\": {\n" +
+                            "      \"type\": \"text\"\n" +
+                            "    }\n," +
+                            "    \"no\": {\n" +
+                            "      \"type\": \"long\"\n" +
+                            "    }\n," +
+                            "    \"age\": {\n" +
+                            "      \"type\": \"short\"\n" +
+                            "    }\n" +
+                            "  }\n" +
+                            " }\n," +
+                            " \"employee\": {\n" +
+                            "  \"properties\": {\n" +
+                            "    \"name\": {\n" +
+                            "      \"type\": \"text\"\n" +
+                            "    }\n," +
+                            "    \"dept\": {\n" +
+                            "      \"type\": \"keyword\"\n" +
+                            "    }\n," +
+                            "    \"age\": {\n" +
+                            "      \"type\": \"short\"\n" +
+                            "    }\n" +
+                            "  }\n" +
+                            " }\n" +
+                            "}", XContentType.JSON)
+                    .get();
+            if (response.isAcknowledged()) {
+                LOG.info("update mappings for index:{} created successfully!", index);
+            } else {
+                LOG.error("failed to update mappings for index:{}!", index);
+            }
+        } catch (Exception e) {
+            LOG.error("failed to update mappings for index:{}!", index, e);
         }
     }
 
@@ -206,5 +286,10 @@ public class IndexAPI {
         } catch (Exception e) {
             LOG.error("failed to refresh indices {} {} ", peopleIndexName, bookIndexName);
         }
+    }
+
+    @After
+    public void destroy() {
+        client.close();
     }
 }
