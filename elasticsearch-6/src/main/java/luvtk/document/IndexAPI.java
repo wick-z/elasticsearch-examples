@@ -181,7 +181,7 @@ public class IndexAPI {
      *     It defaults to true, and should be set to an explicit value to prepare to upgrade to 7.0.<br>
      *         Not setting include_type_name will result in a deprecation warning.<br>
      *     Indices which don’t have an explicit type will use the dummy type name _doc.</blockquote>
-     * @see <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/removal-of-types.html"></a>
+     * @see <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/removal-of-types.html">Removal of mapping types</a>
      */
     @Test
     @Deprecated
