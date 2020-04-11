@@ -121,11 +121,11 @@ public class IndexAPI {
         try {
             IndicesAliasesRequestBuilder indicesAliasesRequestBuilder = indicesAdminClient.prepareAliases();
             // here's to check if alias existed,
-//            IndicesExistsResponse aliasesExistResponse = indicesAdminClient.prepareExists(alias).get();
-//            if (aliasesExistResponse.isExists()) {
-//                LOG.warn("alias exists, deleting...");
-//                indicesAliasesRequestBuilder.removeAlias(index, alias).get();
-//            }
+            IndicesExistsResponse aliasesExistResponse = indicesAdminClient.prepareExists(alias).get();
+            if (aliasesExistResponse.isExists()) {
+                LOG.warn("alias exists, deleting...");
+                indicesAliasesRequestBuilder.removeAlias(index, alias).get();
+            }
 
             AcknowledgedResponse acknowledgedResponse = indicesAliasesRequestBuilder.addAlias(index, alias).get();
             if (acknowledgedResponse.isAcknowledged()) {
@@ -140,6 +140,7 @@ public class IndexAPI {
 
     /**
      * define mappings to an existed index
+     * That should be no any mappings on index!
      */
     @Test
     public void createMappings2ExistedIndex() {
@@ -173,30 +174,24 @@ public class IndexAPI {
     }
 
     /**
-     * define mappings to an existed index
+     * define mappings to an existed index<br>
+     * That should be no any mappings on index!<br>
+     * <em>only one index with one type, and would never specify a type as it would set to default "_doc" in 7.0</em>
+     * <blockquote>In 6.8, the index creation, index template, and mapping APIs support a query string parameter (include_type_name) which indicates whether requests and responses should include a type name.<br>
+     *     It defaults to true, and should be set to an explicit value to prepare to upgrade to 7.0.<br>
+     *         Not setting include_type_name will result in a deprecation warning.<br>
+     *     Indices which don’t have an explicit type will use the dummy type name _doc.</blockquote>
+     * @see <a href="https://www.elastic.co/guide/en/elasticsearch/reference/current/removal-of-types.html"></a>
      */
     @Test
     @Deprecated
-    public void updateMappings4ExistedIndex() {
+    public void createMappingsWithMultiTypes2ExistedIndices() {
         String index = "people";
         try {
-            AcknowledgedResponse response = indicesAdminClient.preparePutMapping(index)
-                    .setType("student").setType("employee")
+            AcknowledgedResponse response = indicesAdminClient.preparePutMapping(new String[]{index})
+                    .setType("employee")
                     // here's to provide the type in the source document as well like {"type_name":{"properties":{}}}
                     .setSource("{\n" +
-                            " \"student\": {\n" +
-                            "  \"properties\": {\n" +
-                            "    \"name\": {\n" +
-                            "      \"type\": \"text\"\n" +
-                            "    }\n," +
-                            "    \"no\": {\n" +
-                            "      \"type\": \"long\"\n" +
-                            "    }\n," +
-                            "    \"age\": {\n" +
-                            "      \"type\": \"short\"\n" +
-                            "    }\n" +
-                            "  }\n" +
-                            " }\n," +
                             " \"employee\": {\n" +
                             "  \"properties\": {\n" +
                             "    \"name\": {\n" +
@@ -213,12 +208,31 @@ public class IndexAPI {
                             "}", XContentType.JSON)
                     .get();
             if (response.isAcknowledged()) {
-                LOG.info("update mappings for index:{} created successfully!", index);
+                LOG.info("define mappings to index:{} created successfully!", index);
             } else {
-                LOG.error("failed to update mappings for index:{}!", index);
+                LOG.error("failed to define mappings to index:{}!", index);
             }
         } catch (Exception e) {
-            LOG.error("failed to update mappings for index:{}!", index, e);
+            LOG.error("failed to define mappings to index:{}!", index, e);
+        }
+    }
+
+    /**
+     * delete indices
+     */
+    @Test
+    public void deleteIndices() {
+        String index = "people";
+        try {
+            AcknowledgedResponse response = indicesAdminClient.prepareDelete(new String[]{index})
+                    .get();
+            if (response.isAcknowledged()) {
+                LOG.info("delete index:{} successfully!", index);
+            } else {
+                LOG.error("failed to delete index:{}!", index);
+            }
+        } catch (Exception e) {
+            LOG.error("failed to delete index:{}!", index, e);
         }
     }
 
@@ -230,7 +244,7 @@ public class IndexAPI {
         String peopleIndexName = "people";
         String bookIndexName = "book";
         try {
-            GetSettingsResponse response = indicesAdminClient.prepareGetSettings(peopleIndexName, bookIndexName).get();
+            GetSettingsResponse response = indicesAdminClient.prepareGetSettings(new String[]{peopleIndexName, bookIndexName}).get();
             for (ObjectObjectCursor<String, Settings> cursor : response.getIndexToSettings()) {
                 String index = cursor.key;
                 Settings settings = cursor.value;
@@ -244,15 +258,15 @@ public class IndexAPI {
     }
 
     /**
-     * update settings for index
+     * update settings for indices
      */
     @Test
-    public void updateSettings4Index() {
+    public void updateSettings4Indices() {
         String peopleIndexName = "people";
         String bookIndexName = "book";
         try {
             // here could be supported for multi indices on the same settings modifying
-            AcknowledgedResponse response = indicesAdminClient.prepareUpdateSettings(peopleIndexName, bookIndexName)
+            AcknowledgedResponse response = indicesAdminClient.prepareUpdateSettings(new String[]{peopleIndexName, bookIndexName})
                     .setSettings(Settings.builder()
                             .put("number_of_replicas", 1)
                     )
@@ -276,7 +290,7 @@ public class IndexAPI {
         String bookIndexName = "book";
         try {
             // refresh 2 indices
-            RefreshResponse response = indicesAdminClient.prepareRefresh(peopleIndexName, bookIndexName)
+            RefreshResponse response = indicesAdminClient.prepareRefresh(new String[]{peopleIndexName, bookIndexName})
                     .get();
             if (response.getStatus().equals(RestStatus.OK)) {
                 LOG.info("refresh indices {} {} successfully!", peopleIndexName, bookIndexName);

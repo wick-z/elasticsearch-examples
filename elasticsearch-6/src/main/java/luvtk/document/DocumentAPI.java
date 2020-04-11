@@ -6,6 +6,11 @@ import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
+import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.index.query.QueryBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.elasticsearch.index.reindex.BulkByScrollResponse;
+import org.elasticsearch.index.reindex.DeleteByQueryAction;
 import org.elasticsearch.rest.RestStatus;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.junit.After;
@@ -45,20 +50,24 @@ public class DocumentAPI {
 
         client = new PreBuiltTransportClient(settings).addTransportAddress(
                 new TransportAddress(InetAddress.getByName("localhost"), 9300));
-
-        // Manually (aka do it yourself) using native byte[] or as a String
-        // Using a Map that will be automatically converted to its JSON equivalent
-        // Using a third party library to serialize your beans such as Jackson
-        // Using built-in helpers XContentFactory.jsonBuilder()
-
     }
 
+    /**
+     * several ways to make a doc format:
+     * <ul>
+     *   <li>Manually (aka do it yourself) using native byte[] or as a String</li>
+     *   <li>Using a Map that will be automatically converted to its JSON equivalent</li>
+     *   <li>Using a third party library to serialize your beans such as Jackson</li>
+     *   <li>Using built-in helpers XContentFactory.jsonBuilder()</li>
+     * </ul>
+     */
     @Test
     public void addDocToIndex() {
         String index = "people";
         String type = "student";
         try {
             // if we don't specify the id here, es would use its own id generator to generate id
+            // here we could use the dummy type "_doc" or type "student"
             IndexResponse response = client.prepareIndex(index, "_doc")
                     .setSource(jsonBuilder()
                             .startObject()
@@ -78,6 +87,9 @@ public class DocumentAPI {
         }
     }
 
+    /**
+     * GET API：get source from index
+     */
     @Test
     public void getSourceFromIndex() {
         String index = "people";
@@ -91,7 +103,9 @@ public class DocumentAPI {
         }
     }
 
-    
+    /**
+     * DELETE API: delete source from index
+     */
     @Test
     public void deleteSourceFromIndex() {
         String index = "people";
@@ -102,6 +116,25 @@ public class DocumentAPI {
             LOG.info("delete source from index={} type={}, id={}, result={}", index, type, id, response.getResult());
         } catch (Exception e) {
             LOG.error("failed to delete source from index={} type={} id={}", index, type, id, e);
+        }
+    }
+
+    /**
+     * <blockquote>The delete by query API allows one to delete a given set of documents based on the result of a query</blockquote>
+     * delete result=BulkByScrollResponse[took=337.4ms,timed_out=false,sliceId=null,updated=0,created=0,deleted=1,batches=1,versionConflicts=0
+     * ,noops=0,retries=0,throttledUntil=0s,bulk_failures=[],search_failures=[]]
+     */
+    @Test
+    public void deleteByQuery() {
+        try {
+            BulkByScrollResponse response = DeleteByQueryAction.INSTANCE.newRequestBuilder(client)
+                    .filter(QueryBuilders.matchQuery("name", "joseph"))
+                    // specify indices
+                    .source("people")
+                    .get();
+            LOG.info("delete result={}", response);
+        } catch (Exception e) {
+            LOG.error("failed to delete by query", e);
         }
     }
 
