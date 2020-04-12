@@ -1,8 +1,12 @@
 package luvtk.document;
 
+import com.google.common.collect.Maps;
 import org.elasticsearch.action.delete.DeleteResponse;
 import org.elasticsearch.action.get.GetResponse;
+import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.action.index.IndexResponse;
+import org.elasticsearch.action.update.UpdateRequest;
+import org.elasticsearch.action.update.UpdateResponse;
 import org.elasticsearch.client.transport.TransportClient;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.transport.TransportAddress;
@@ -12,6 +16,9 @@ import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.index.reindex.BulkByScrollResponse;
 import org.elasticsearch.index.reindex.DeleteByQueryAction;
 import org.elasticsearch.rest.RestStatus;
+import org.elasticsearch.script.Script;
+import org.elasticsearch.script.ScriptService;
+import org.elasticsearch.script.ScriptType;
 import org.elasticsearch.transport.client.PreBuiltTransportClient;
 import org.junit.After;
 import org.junit.Before;
@@ -22,7 +29,11 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Collections;
 import java.util.Date;
+import java.util.Map;
+import java.util.concurrent.ExecutionException;
+
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
 
 /**
@@ -125,7 +136,7 @@ public class DocumentAPI {
      * ,noops=0,retries=0,throttledUntil=0s,bulk_failures=[],search_failures=[]]
      */
     @Test
-    public void deleteByQuery() {
+    public void deleteDocsByQuery() {
         try {
             BulkByScrollResponse response = DeleteByQueryAction.INSTANCE.newRequestBuilder(client)
                     .filter(QueryBuilders.matchQuery("name", "joseph"))
@@ -135,6 +146,141 @@ public class DocumentAPI {
             LOG.info("delete result={}", response);
         } catch (Exception e) {
             LOG.error("failed to delete by query", e);
+        }
+    }
+
+    /**
+     * update existed doc with <em>UpdateRequest</em>
+     * <blockquote>
+     *         The update API also support passing a partial document, which will be merged into the existing document
+     *         (simple recursive merge, inner merging of objects, replacing core "keys/values" and arrays).
+     * </blockquote>
+     */
+    @Test
+    public void updateDocByRequest() {
+        String index = "people";
+        try {
+            UpdateRequest updateRequest = new UpdateRequest();
+            updateRequest.index(index);
+            // default type "_doc", equivalent to the type we created the mappings
+            updateRequest.type("_doc");
+            updateRequest.id("THFPbHEBT1iPBaUMEu8d");
+            updateRequest.doc(jsonBuilder()
+                    .startObject()
+                    // update existed field of doc
+//                    .field("name", "luvtk")
+                    // a field non-existed, update would be add the new field to the doc
+                    .field("create_time", new Date())
+                    .endObject());
+            // send this request to client
+            UpdateResponse updateResponse = client.update(updateRequest).get();
+            LOG.info("update document of index={} type={}, id={}, result={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", updateResponse);
+        } catch (Exception e) {
+            LOG.error("failed to update document of index={} type={}, id={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", e);
+        }
+    }
+
+    /**
+     *  update doc by Request using script
+     * <blockquote>
+     *         The update API also support passing a partial document, which will be merged into the existing document
+     *         (simple recursive merge, inner merging of objects, replacing core "keys/values" and arrays).
+     * </blockquote>
+     */
+    @Test
+    public void updateDocByRequestWithBuiltinScript() {
+        String index = "people";
+        try {
+            UpdateRequest updateRequest = new UpdateRequest(index, "_doc", "THFPbHEBT1iPBaUMEu8d")
+                    .script(new Script("ctx._source.gender = \"male\""));
+            UpdateResponse updateResponse = client.update(updateRequest).get();
+            LOG.info("update document of index={} type={}, id={}, result={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", updateResponse);
+        } catch (Exception e) {
+            LOG.error("failed to update document of index={} type={}, id={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", e);
+        }
+    }
+
+    /**
+     * update doc with client
+     * <blockquote>
+     *         The update API also support passing a partial document, which will be merged into the existing document
+     *         (simple recursive merge, inner merging of objects, replacing core "keys/values" and arrays).
+     * </blockquote>
+     */
+    @Test
+    public void updateDocByClient() {
+        String index = "people";
+        try {
+            UpdateResponse updateResponse = client.prepareUpdate(index, "_doc", "THFPbHEBT1iPBaUMEu8d")
+                    .setDoc(jsonBuilder()
+                            .startObject()
+//                            .field("age", 18)
+                            // status is not defined in the mappings, update would add this field into the type
+                            .field("status", "on")
+                            .endObject())
+                    .get();
+            LOG.info("update document of index={} type={}, id={}, result={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", updateResponse);
+        } catch (Exception e) {
+            LOG.error("failed to update document of index={} type={}, id={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", e);
+        }
+    }
+
+    /**
+     * update doc by builtin script
+     * <em>curl -X'POST' -H'Content-Type:application/json'
+     * -d'{"script":{"lang":"painless","inline":"ctx._source.name = luvtk2"}}'
+     * http://localhost:9200/people/_doc/THFPbHEBT1iPBaUMEu8d/_update</em>
+     *
+     */
+    @Test
+    public void updateDocByClientWithBuiltinScript() {
+        String index = "people";
+        // @NOTE type of value in params should be specified, as defined in mappings
+        Map<String, Object> params = Maps.newHashMap();
+        try {
+            params.put("age", 10);
+            UpdateResponse updateResponse = client.prepareUpdate(index, "_doc", "THFPbHEBT1iPBaUMEu8d")
+                    // script type : inline, script lang: default lang, painless
+                    // The id for this {@link Script} if the {@link ScriptType} is {@link ScriptType#STORED}.
+                    // The code for this {@link Script} if the {@link ScriptType} is {@link ScriptType#INLINE}.
+                    // The user-defined params to be bound for script execution.
+//                    .setScript(new Script(ScriptType.INLINE, Script.DEFAULT_SCRIPT_LANG, "ctx._source.name = \"luvtk2\"", Collections.EMPTY_MAP))
+                    .setScript(new Script(ScriptType.INLINE, Script.DEFAULT_SCRIPT_LANG, "ctx._source.age += params.age", params))
+                    .get();
+            LOG.info("update document of index={} type={}, id={}, result={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", updateResponse);
+        } catch (Exception e) {
+            LOG.error("failed to update document of index={} type={}, id={}", index, "_doc", "THFPbHEBT1iPBaUMEu8d", e);
+        }
+    }
+
+    /**
+     * <blockquote>
+     *     If the document does not exist, the content of the upsert element(index request) will be used to index the fresh doc
+     *     If the document exists, then just update the field, if the field does not exist, the content of the update request will add to the type
+     * </blockquote>
+     */
+    @Test
+    public void upsert() {
+        String index = "people";
+        try {
+            IndexRequest indexRequest = new IndexRequest(index, "_doc", "1")
+                    .source(jsonBuilder()
+                            .startObject()
+                            .field("name", "Joe Smith")
+                            .field("gender", "female")
+                            // add a new field
+                            .field("update_status", "1")
+                            .endObject());
+            UpdateRequest updateRequest = new UpdateRequest(index, "_doc", "1")
+                    .doc(jsonBuilder()
+                            .startObject()
+                            .field("gender", "male")
+                            .endObject())
+                    .upsert(indexRequest);
+            UpdateResponse updateResponse = client.update(updateRequest).get();
+            LOG.info("update document of index={} type={}, id={}, result={}", index, "_doc", 1, updateResponse);
+        } catch (Exception e) {
+            LOG.info("update document of index={} type={}, id={}", index, "_doc", 1, e);
         }
     }
 
